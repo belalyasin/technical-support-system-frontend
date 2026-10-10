@@ -1,11 +1,9 @@
-import {Component, OnInit, OnDestroy, ChangeDetectorRef} from '@angular/core';
-import {FormBuilder, FormGroup, Validators} from '@angular/forms';
-import {Subscription, Observable} from 'rxjs';
-import {first} from 'rxjs/operators';
-import {UserModel} from '../../models/user.model';
-import {AuthService} from '../../services/auth.service';
-import {ActivatedRoute, Router} from '@angular/router';
-import {AuthServiceService} from "../../services/auth-service.service";
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
+import { apiErrorMessage } from '../../../support/models';
+import { AuthServiceService } from '../../services/auth-service.service';
 
 @Component({
   selector: 'app-login',
@@ -13,89 +11,76 @@ import {AuthServiceService} from "../../services/auth-service.service";
   styleUrls: ['./login.component.scss'],
 })
 export class LoginComponent implements OnInit, OnDestroy {
-  // KeenThemes mock, change it to:
-  defaultAuth: any = {
-    email: 'admin@demo.com',
-    password: 'demo',
-  };
   loginForm: FormGroup;
-  hasError: boolean;
-  returnUrl: string;
-  isLoading$: Observable<boolean>;
+  errorMessage = '';
+  notice = '';
+  isLoading = false;
 
-  // private fields
-  private unsubscribe: Subscription[] = []; // Read more: => https://brianflove.com/2016/12/11/anguar-2-unsubscribe-observables/
+  private unsubscribe: Subscription[] = [];
 
   constructor(
     private fb: FormBuilder,
     private authService: AuthServiceService,
     private route: ActivatedRoute,
-    private router: Router
-  ) {
-    // this.isLoading$ = this.authService.isLoading$;
-    // redirect to home if already logged in
-    // if (this.authService.currentUserValue) {
-    //   this.router.navigate(['/dashboard']);
-    // }
-  }
+    private router: Router,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
-    // this.authService.currentUserValue;
-    this.initForm();
-    // get return url from route parameters or default to '/'
-    this.returnUrl =
-      this.route.snapshot.queryParams['returnUrl'.toString()] || '/';
+    this.loginForm = this.fb.group({
+      email: [
+        this.route.snapshot.queryParamMap.get('email') || '',
+        Validators.compose([
+          Validators.required,
+          Validators.email,
+          Validators.maxLength(320),
+        ]),
+      ],
+      password: [
+        '',
+        Validators.compose([Validators.required, Validators.minLength(6)]),
+      ],
+    });
+
+    const reason = this.route.snapshot.queryParamMap.get('notice');
+    if (reason === 'registered') {
+      this.notice = 'Your account is ready. Sign in to continue.';
+    } else if (reason === 'reset') {
+      this.notice = 'Your password was reset. Sign in with the new one.';
+    }
   }
 
-  // convenience getter for easy access to form fields
   get f() {
     return this.loginForm.controls;
   }
 
-  initForm() {
-    this.loginForm = this.fb.group({
-      email: [
-        this.defaultAuth.email,
-        Validators.compose([
-          Validators.required,
-          Validators.email,
-          Validators.minLength(3),
-          Validators.maxLength(320), // https://stackoverflow.com/questions/386294/what-is-the-maximum-length-of-a-valid-email-address
-        ]),
-      ],
-      password: [
-        this.defaultAuth.password,
-        Validators.compose([
-          Validators.required,
-          Validators.minLength(3),
-          Validators.maxLength(100),
-        ]),
-      ],
-    });
-  }
-
-  submit() {
-    // this.authService.currentUserValue;
-    console.log('76: login 1');
-    console.log('77: ', this.f.email.value, this.f.password.value);
-    this.hasError = false;
+  submit(): void {
+    if (this.loginForm.invalid || this.isLoading) {
+      this.loginForm.markAllAsTouched();
+      return;
+    }
+    this.errorMessage = '';
+    this.isLoading = true;
     const loginSubscr = this.authService
       .login(this.f.email.value, this.f.password.value)
-      .pipe(first())
-      .subscribe((user: any) => {
-        if (user) {
-          console.log("login success", user);
-          localStorage.setItem('token', user.token);
-          this.router.navigate(['/dashboard']);
-          // this.router.navigate([this.returnUrl]);
-        } else {
-          this.hasError = true;
+      .subscribe(
+        () => {
+          this.isLoading = false;
+          this.router.navigate(['/']);
+        },
+        (error) => {
+          this.isLoading = false;
+          this.errorMessage =
+            error?.status === 400 || error?.status === 401
+              ? 'The email or password is incorrect.'
+              : apiErrorMessage(error, 'Could not sign in. Please try again.');
+          this.cdr.markForCheck();
         }
-      });
+      );
     this.unsubscribe.push(loginSubscr);
   }
 
-  ngOnDestroy() {
+  ngOnDestroy(): void {
     this.unsubscribe.forEach((sb) => sb.unsubscribe());
   }
 }

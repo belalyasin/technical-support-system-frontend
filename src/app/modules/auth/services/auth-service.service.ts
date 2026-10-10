@@ -1,112 +1,156 @@
-import {Injectable} from '@angular/core';
-import {Observable, of} from "rxjs";
-import {UserType} from "./auth.service";
-import {HttpClient, HttpHeaders, HttpParams} from "@angular/common/http";
-import {catchError, map} from "rxjs/operators";
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { BehaviorSubject, Observable, of } from 'rxjs';
+import { catchError, finalize, map, tap } from 'rxjs/operators';
+import { environment } from 'src/environments/environment';
+import { ApiUser, STAFF_ROLES } from '../../support/models';
 
+const TOKEN_KEY = 'token';
+
+/**
+ * Talks to the Technical Support System API for everything about the signed-in
+ * account and keeps the current user in memory for the rest of the app.
+ */
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class AuthServiceService {
+  private authApi = environment.apiBaseUrl;
+  private userSubject = new BehaviorSubject<ApiUser | null>(null);
 
-  private authApi = 'http://127.0.0.1:8000/api';
+  currentUser$: Observable<ApiUser | null> = this.userSubject.asObservable();
+  isStaff$: Observable<boolean> = this.currentUser$.pipe(
+    map((user) => AuthServiceService.userIsStaff(user))
+  );
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient) {}
+
+  static userIsStaff(user: ApiUser | null): boolean {
+    return !!user?.roles?.some((role) => STAFF_ROLES.includes(role as any));
   }
 
-  login(email: string, password: string): Observable<any> {
-    const body = new HttpParams()
-      .set('email', email)
-      .set('password', password);
-    return this.http.post<any>(
-      `${this.authApi}/login`,
-      {email, password},
-      // body.toString(),
-      {
-        headers: new HttpHeaders({'Content-Type': 'application/json'}),
-        observe: 'body',
-        withCredentials: true // Include credentials if needed
-      }
+  get token(): string | null {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  get currentUser(): ApiUser | null {
+    return this.userSubject.value;
+  }
+
+  get isStaff(): boolean {
+    return AuthServiceService.userIsStaff(this.currentUser);
+  }
+
+  get isSuperAdmin(): boolean {
+    return !!this.currentUser?.roles?.includes('super admin');
+  }
+
+  isLoggedIn(): boolean {
+    return this.token !== null;
+  }
+
+  login(email: string, password: string): Observable<ApiUser> {
+    return this.http
+      .post<any>(`${this.authApi}/login`, { email, password })
+      .pipe(
+        map((res) => {
+          localStorage.setItem(TOKEN_KEY, res.token);
+          const user: ApiUser = {
+            id: res.user.id,
+            name: res.user.name,
+            email: res.user.email,
+            phone: res.user.phone,
+            roles: res.roles || [],
+          };
+          this.userSubject.next(user);
+          return user;
+        })
+      );
+  }
+
+  /** Public sign-up. The API always creates a customer account. */
+  register(data: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+  }): Observable<any> {
+    return this.http.post<any>(`${this.authApi}/register`, data);
+  }
+
+  /** Revokes the token on the server; the local session is cleared either way. */
+  logout(): Observable<any> {
+    if (!this.isLoggedIn()) {
+      this.clearSession();
+      return of(null);
+    }
+    return this.http.post<any>(`${this.authApi}/logout`, {}).pipe(
+      catchError(() => of(null)),
+      finalize(() => this.clearSession())
     );
   }
 
-  register(data: UserType): Observable<UserType> {
-    return this.http.post<UserType>(`${this.authApi}/signup`, data, {
-      headers: new HttpHeaders({'Content-Type': 'application/json'}),
-      observe: 'body',
+  clearSession(): void {
+    localStorage.removeItem(TOKEN_KEY);
+    this.userSubject.next(null);
+  }
+
+  /** Loads the signed-in user from the API. Emits null when there is no valid session. */
+  getCurrentUser(): Observable<ApiUser | null> {
+    if (!this.isLoggedIn()) {
+      return of(null);
+    }
+    return this.http.get<any>(`${this.authApi}/current-user`).pipe(
+      map((res) => res.data as ApiUser),
+      tap((user) => this.userSubject.next(user)),
+      catchError(() => of(null))
+    );
+  }
+
+  forgotPassword(email: string): Observable<any> {
+    return this.http.post<any>(`${this.authApi}/forgot-password`, { email });
+  }
+
+  resetPassword(data: {
+    email: string;
+    code: string;
+    password: string;
+    password_confirmation: string;
+  }): Observable<any> {
+    return this.http.post<any>(`${this.authApi}/reset-password`, data);
+  }
+
+  changePassword(data: {
+    password: string;
+    new_password: string;
+    new_password_confirmation: string;
+  }): Observable<any> {
+    return this.http.put<any>(`${this.authApi}/change-password`, data);
+  }
+
+  initiateEmailChange(new_email: string): Observable<any> {
+    return this.http.post<any>(`${this.authApi}/initiateEmailChange`, {
+      new_email,
     });
   }
 
-  logout(): Observable<any> {
-    const token = localStorage.getItem('token');
-    const newToken = token?.split('|')[1];
-    console.log('token logout', token)
-    console.log('token new logout', newToken)
-    const headers = new HttpHeaders({Authorization: `Bearer ${token}`});
-    localStorage.removeItem('token');
-    return this.http.post<any>(
-      `${this.authApi}/logout`,
-      {},
-      {
-        headers
-      }
-    ).pipe(
-      // console.log('logout 56');
-      catchError(this.handleError<any>('logout')),
-    )
-      ;
+  confirmEmailChange(new_email: string, code: string): Observable<any> {
+    return this.http.post<any>(`${this.authApi}/confirmEmailChange`, {
+      new_email,
+      code,
+    });
   }
 
-  getCurrentUser(): Observable<any> {
-    const token = localStorage.getItem('token');
-    token?.split('|');
-    // const startIndex = token?.indexOf('B');
-    // const headers = new HttpHeaders({Authorization: `Bearer ${token}`});
-    return this.http
-      .get<any>(`${this.authApi}/current-user`, {
-        headers: new HttpHeaders({
-          Authorization: `Bearer ${token}`,
-        }),
-      })
-      .pipe(catchError(this.handleError<any>('getCurrentUser')));
+  initiatePhoneChange(new_phone: string): Observable<any> {
+    return this.http.post<any>(`${this.authApi}/initiatePhoneChange`, {
+      new_phone,
+    });
   }
 
-  getById(id: any): Observable<UserType> {
-    return this.http.get<UserType>(`${this.authApi}/${id}`, {
-      headers: new HttpHeaders({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }),
-      observe: 'body'
-    }).pipe(
-      map((res: any) => {
-        return res.data;
-      })
-    )
-  }
-
-  update(id: any, data: any): Observable<UserType> {
-    return this.http.put<UserType>(`${this.authApi}/${id}`, data, {
-      headers: new HttpHeaders({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      }),
-      observe: 'body'
-    }).pipe(
-      map((res: any) => {
-        return res.data;
-      })
-    )
-  }
-
-  isLoggedIn() {
-    return localStorage.getItem('token') !== null;
-  }
-
-  private handleError<T>(operation = 'operation', result?: T) {
-    return (error: any): Observable<T> => {
-      console.error(error);
-      return of(result as T);
-    };
+  confirmPhoneChange(new_phone: string, code: string): Observable<any> {
+    return this.http.post<any>(`${this.authApi}/confirmPhoneChange`, {
+      new_phone,
+      code,
+    });
   }
 }

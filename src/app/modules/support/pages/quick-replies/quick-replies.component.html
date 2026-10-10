@@ -1,0 +1,126 @@
+<div class="row g-5 g-xl-8">
+  <div class="col-xl-4">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title fw-bolder text-dark">
+          {{ editingId === null ? "Add a quick reply" : "Edit quick reply" }}
+        </h3>
+      </div>
+      <form class="card-body" (ngSubmit)="save()" data-testid="reply-form">
+        <div class="mb-5">
+          <label class="form-label fw-bold required">Text</label>
+          <textarea
+            class="form-control form-control-solid"
+            name="body"
+            rows="4"
+            [maxlength]="maxLength"
+            [(ngModel)]="body"
+            data-testid="reply-body"
+          ></textarea>
+          <div class="form-text">{{ body.length }}/{{ maxLength }}</div>
+        </div>
+        <div class="mb-5">
+          <label class="form-label fw-bold">Follows</label>
+          <select
+            class="form-select form-select-solid"
+            name="parent"
+            [(ngModel)]="parentId"
+            data-testid="reply-parent"
+          >
+            <option [ngValue]="null">Nothing (top level)</option>
+            <option *ngFor="let option of parentOptions" [ngValue]="option.id">
+              {{ option.body }}
+            </option>
+          </select>
+          <div class="form-text">
+            Use this to group a reply under the one it usually comes after.
+          </div>
+        </div>
+        <div class="alert alert-danger py-3" *ngIf="formError" data-testid="reply-form-error">
+          {{ formError }}
+        </div>
+        <div class="d-flex">
+          <button type="submit" class="btn btn-primary me-3" [disabled]="saving" data-testid="reply-save">
+            {{ saving ? "Saving..." : editingId === null ? "Add" : "Save changes" }}
+          </button>
+          <button type="button" class="btn btn-light" *ngIf="editingId !== null" (click)="resetForm()">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-xl-8">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title fw-bolder text-dark">Quick replies</h3>
+        <div class="card-toolbar text-muted">{{ items.length }} saved</div>
+      </div>
+      <div class="card-body py-3">
+        <div class="alert alert-success py-3" *ngIf="notice" data-testid="reply-notice">{{ notice }}</div>
+        <div class="alert alert-danger py-3" *ngIf="error" data-testid="reply-error">{{ error }}</div>
+        <div class="text-center text-muted py-10" *ngIf="loading && !items.length">Loading...</div>
+        <div
+          class="text-center text-muted py-10"
+          *ngIf="!loading && !error && !items.length"
+          data-testid="reply-empty"
+        >
+          No quick replies yet. Add the answers your team sends most often.
+        </div>
+
+        <div class="table-responsive" *ngIf="items.length">
+          <table class="table table-row-dashed align-middle gs-0 gy-4" data-testid="reply-table">
+            <thead>
+              <tr class="fw-bolder text-muted">
+                <th>Text</th>
+                <th class="min-w-150px">Follows</th>
+                <th class="min-w-175px text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of items; trackBy: trackById" data-testid="reply-row">
+                <td class="text-dark fw-bold" style="white-space: pre-wrap; word-break: break-word">{{ item.body }}</td>
+                <td class="text-muted">{{ parentIdOf(item) === null ? "—" : item.parent_name }}</td>
+                <td class="text-end text-nowrap">
+                  <ng-container *ngIf="confirmDeleteId !== item.id">
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-light me-2"
+                      (click)="edit(item)"
+                      data-testid="reply-edit"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-light-danger"
+                      (click)="confirmDeleteId = item.id"
+                      data-testid="reply-delete"
+                    >
+                      Delete
+                    </button>
+                  </ng-container>
+                  <ng-container *ngIf="confirmDeleteId === item.id">
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-danger me-2"
+                      [disabled]="deletingId === item.id"
+                      (click)="remove(item)"
+                      data-testid="reply-confirm-delete"
+                    >
+                      Yes, delete
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light" (click)="confirmDeleteId = null">
+                      Keep
+                    </button>
+                  </ng-container>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

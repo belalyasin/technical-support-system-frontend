@@ -5,6 +5,7 @@ import { LoginComponent } from './components/login/login.component';
 import { RegistrationComponent } from './components/registration/registration.component';
 import { ForgotPasswordComponent } from './components/forgot-password/forgot-password.component';
 import { LogoutComponent } from './components/logout/logout.component';
+import { GuestGuard } from './services/auth.guard';
 
 const routes: Routes = [
   {
@@ -19,15 +20,17 @@ const routes: Routes = [
       {
         path: 'login',
         component: LoginComponent,
-        data: { returnUrl: window.location.pathname },
+        canActivate: [GuestGuard],
       },
       {
         path: 'registration',
         component: RegistrationComponent,
+        canActivate: [GuestGuard],
       },
       {
         path: 'forgot-password',
         component: ForgotPasswordComponent,
+        canActivate: [GuestGuard],
       },
       {
         path: 'logout',

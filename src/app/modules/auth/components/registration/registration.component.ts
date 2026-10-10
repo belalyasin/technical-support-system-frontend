@@ -1,11 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { FormGroup, FormBuilder, Validators } from '@angular/forms';
-import { Subscription, Observable } from 'rxjs';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { AuthService } from '../../services/auth.service';
+import { Subscription } from 'rxjs';
+import { apiErrorMessage } from '../../../support/models';
+import { AuthServiceService } from '../../services/auth-service.service';
 import { ConfirmPasswordValidator } from './confirm-password.validator';
-import { UserModel } from '../../models/user.model';
-import { first } from 'rxjs/operators';
 
 @Component({
   selector: 'app-registration',
@@ -14,37 +13,22 @@ import { first } from 'rxjs/operators';
 })
 export class RegistrationComponent implements OnInit, OnDestroy {
   registrationForm: FormGroup;
-  hasError: boolean;
-  isLoading$: Observable<boolean>;
+  errorMessage = '';
+  isLoading = false;
 
-  // private fields
-  private unsubscribe: Subscription[] = []; // Read more: => https://brianflove.com/2016/12/11/anguar-2-unsubscribe-observables/
+  private unsubscribe: Subscription[] = [];
 
   constructor(
     private fb: FormBuilder,
-    private authService: AuthService,
-    private router: Router
-  ) {
-    this.isLoading$ = this.authService.isLoading$;
-    // redirect to home if already logged in
-    if (this.authService.currentUserValue) {
-      this.router.navigate(['/']);
-    }
-  }
+    private authService: AuthServiceService,
+    private router: Router,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
-    this.initForm();
-  }
-
-  // convenience getter for easy access to form fields
-  get f() {
-    return this.registrationForm.controls;
-  }
-
-  initForm() {
     this.registrationForm = this.fb.group(
       {
-        fullname: [
+        name: [
           '',
           Validators.compose([
             Validators.required,
@@ -53,31 +37,29 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           ]),
         ],
         email: [
-          'qwe@qwe.qwe',
+          '',
           Validators.compose([
             Validators.required,
             Validators.email,
-            Validators.minLength(3),
-            Validators.maxLength(320), // https://stackoverflow.com/questions/386294/what-is-the-maximum-length-of-a-valid-email-address
+            Validators.maxLength(320),
+          ]),
+        ],
+        phone: [
+          '',
+          Validators.compose([
+            Validators.required,
+            Validators.pattern(/^[0-9]{10,15}$/),
           ]),
         ],
         password: [
           '',
           Validators.compose([
             Validators.required,
-            Validators.minLength(3),
+            Validators.minLength(6),
             Validators.maxLength(100),
           ]),
         ],
-        cPassword: [
-          '',
-          Validators.compose([
-            Validators.required,
-            Validators.minLength(3),
-            Validators.maxLength(100),
-          ]),
-        ],
-        agree: [false, Validators.compose([Validators.required])],
+        cPassword: ['', Validators.compose([Validators.required])],
       },
       {
         validator: ConfirmPasswordValidator.MatchPassword,
@@ -85,30 +67,59 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     );
   }
 
-  submit() {
-    this.hasError = false;
-    const result: {
-      [key: string]: string;
-    } = {};
-    Object.keys(this.f).forEach((key) => {
-      result[key] = this.f[key].value;
-    });
-    const newUser = new UserModel();
-    newUser.setUser(result);
+  get f() {
+    return this.registrationForm.controls;
+  }
+
+  showError(name: string): boolean {
+    const control = this.f[name];
+    return control.invalid && (control.dirty || control.touched);
+  }
+
+  submit(): void {
+    if (this.registrationForm.invalid || this.isLoading) {
+      this.registrationForm.markAllAsTouched();
+      return;
+    }
+    this.errorMessage = '';
+    this.isLoading = true;
+    const email = this.f.email.value.trim();
+    const password = this.f.password.value;
+
     const registrationSubscr = this.authService
-      .registration(newUser)
-      .pipe(first())
-      .subscribe((user: UserModel) => {
-        if (user) {
-          this.router.navigate(['/']);
-        } else {
-          this.hasError = true;
+      .register({
+        name: this.f.name.value.trim(),
+        email,
+        phone: this.f.phone.value.trim(),
+        password,
+      })
+      .subscribe(
+        () => {
+          // The API does not sign the new user in, so do it with what they just typed
+          const loginSubscr = this.authService.login(email, password).subscribe(
+            () => {
+              this.isLoading = false;
+              this.router.navigate(['/']);
+            },
+            () => {
+              this.isLoading = false;
+              this.router.navigate(['/auth/login'], {
+                queryParams: { notice: 'registered', email },
+              });
+            }
+          );
+          this.unsubscribe.push(loginSubscr);
+        },
+        (error) => {
+          this.isLoading = false;
+          this.errorMessage = apiErrorMessage(error, 'The account was not created.');
+          this.cdr.markForCheck();
         }
-      });
+      );
     this.unsubscribe.push(registrationSubscr);
   }
 
-  ngOnDestroy() {
+  ngOnDestroy(): void {
     this.unsubscribe.forEach((sb) => sb.unsubscribe());
   }
 }

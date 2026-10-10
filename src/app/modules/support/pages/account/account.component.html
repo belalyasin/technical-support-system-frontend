@@ -1,0 +1,108 @@
+<div class="card mb-5 mb-xl-8" *ngIf="user">
+  <div class="card-body d-flex align-items-center">
+    <div class="symbol symbol-75px symbol-circle me-7">
+      <span class="symbol-label bg-light-primary text-primary fs-1 fw-bolder">
+        {{ user.name.charAt(0).toUpperCase() }}
+      </span>
+    </div>
+    <div>
+      <div class="d-flex align-items-center mb-2">
+        <span class="text-gray-900 fs-2 fw-bolder me-3" data-testid="account-name">{{ user.name }}</span>
+        <span class="badge badge-light-success" data-testid="account-role">{{ roleLabel }}</span>
+      </div>
+      <div class="text-gray-600 fw-bold" data-testid="account-email">{{ user.email }}</div>
+      <div class="text-gray-600 fw-bold" data-testid="account-phone">{{ user.phone }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-5 g-xl-8">
+  <div class="col-xl-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <h3 class="card-title fw-bolder text-dark">Change password</h3>
+      </div>
+      <form class="card-body" (ngSubmit)="changePassword()" data-testid="password-form">
+        <div class="mb-5">
+          <label class="form-label fw-bold">Current password</label>
+          <input type="password" class="form-control form-control-solid" name="password" [(ngModel)]="password" autocomplete="current-password" data-testid="password-current" />
+        </div>
+        <div class="mb-5">
+          <label class="form-label fw-bold">New password</label>
+          <input type="password" class="form-control form-control-solid" name="newPassword" [(ngModel)]="newPassword" autocomplete="new-password" data-testid="password-new" />
+          <div class="form-text">
+            At least 8 characters, with upper and lower case letters, a number and a symbol.
+          </div>
+        </div>
+        <div class="mb-5">
+          <label class="form-label fw-bold">Repeat new password</label>
+          <input type="password" class="form-control form-control-solid" name="newPasswordConfirmation" [(ngModel)]="newPasswordConfirmation" autocomplete="new-password" data-testid="password-confirm" />
+        </div>
+        <div class="alert alert-danger py-3" *ngIf="passwordError" data-testid="password-error">{{ passwordError }}</div>
+        <div class="alert alert-success py-3" *ngIf="passwordNotice" data-testid="password-notice">{{ passwordNotice }}</div>
+        <button type="submit" class="btn btn-primary" [disabled]="passwordBusy" data-testid="password-save">
+          {{ passwordBusy ? "Saving..." : "Change password" }}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-xl-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <h3 class="card-title fw-bolder text-dark">Change email</h3>
+      </div>
+      <div class="card-body">
+        <div class="mb-5">
+          <label class="form-label fw-bold">New email address</label>
+          <input type="email" class="form-control form-control-solid" [(ngModel)]="newEmail" [disabled]="emailStep === 'code'" data-testid="email-new" />
+        </div>
+        <div class="mb-5" *ngIf="emailStep === 'code'">
+          <label class="form-label fw-bold">Code</label>
+          <input type="text" class="form-control form-control-solid" maxlength="4" [(ngModel)]="emailCode" data-testid="email-code" />
+        </div>
+        <div class="alert alert-danger py-3" *ngIf="emailError" data-testid="email-error">{{ emailError }}</div>
+        <div class="alert alert-success py-3" *ngIf="emailNotice" data-testid="email-notice">{{ emailNotice }}</div>
+        <button type="button" class="btn btn-primary" *ngIf="emailStep === 'idle'" [disabled]="emailBusy || !newEmail.trim()" (click)="sendEmailCode()" data-testid="email-send">
+          {{ emailBusy ? "Sending..." : "Send code" }}
+        </button>
+        <ng-container *ngIf="emailStep === 'code'">
+          <button type="button" class="btn btn-primary me-3" [disabled]="emailBusy || emailCode.trim().length !== 4" (click)="confirmEmail()" data-testid="email-confirm">
+            {{ emailBusy ? "Saving..." : "Confirm" }}
+          </button>
+          <button type="button" class="btn btn-light" (click)="cancelEmail()">Cancel</button>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <h3 class="card-title fw-bolder text-dark">Change phone number</h3>
+      </div>
+      <div class="card-body">
+        <div class="mb-5">
+          <label class="form-label fw-bold">New phone number</label>
+          <input type="text" class="form-control form-control-solid" [(ngModel)]="newPhone" [disabled]="phoneStep === 'code'" data-testid="phone-new" />
+          <div class="form-text">10 to 15 digits. The confirmation code goes to your email.</div>
+        </div>
+        <div class="mb-5" *ngIf="phoneStep === 'code'">
+          <label class="form-label fw-bold">Code</label>
+          <input type="text" class="form-control form-control-solid" maxlength="4" [(ngModel)]="phoneCode" data-testid="phone-code" />
+        </div>
+        <div class="alert alert-danger py-3" *ngIf="phoneError" data-testid="phone-error">{{ phoneError }}</div>
+        <div class="alert alert-success py-3" *ngIf="phoneNotice" data-testid="phone-notice">{{ phoneNotice }}</div>
+        <button type="button" class="btn btn-primary" *ngIf="phoneStep === 'idle'" [disabled]="phoneBusy || !newPhone.trim()" (click)="sendPhoneCode()" data-testid="phone-send">
+          {{ phoneBusy ? "Sending..." : "Send code" }}
+        </button>
+        <ng-container *ngIf="phoneStep === 'code'">
+          <button type="button" class="btn btn-primary me-3" [disabled]="phoneBusy || phoneCode.trim().length !== 4" (click)="confirmPhone()" data-testid="phone-confirm">
+            {{ phoneBusy ? "Saving..." : "Confirm" }}
+          </button>
+          <button type="button" class="btn btn-light" (click)="cancelPhone()">Cancel</button>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+</div>

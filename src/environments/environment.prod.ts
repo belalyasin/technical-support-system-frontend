@@ -6,7 +6,9 @@ export const environment = {
   production: true,
   appVersion: 'v8.0.37',
   USERDATA_KEY: 'authf649fc9a5f55',
-  isMockEnabled: true,
+  isMockEnabled: false,
+  // Base URL of the Technical Support System API (Laravel)
+  apiBaseUrl: 'http://127.0.0.1:8000/api',
   apiUrl: 'api',
   appThemeName: 'Metronic',
   appPurchaseUrl: 'https://1.envato.market/EA4JP',
